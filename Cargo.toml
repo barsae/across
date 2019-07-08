@@ -1,0 +1,6 @@
+[package]
+name = "across"
+version = "0.1.0"
+authors = ["barsae <barsae@gmail.com>"]
+
+[dependencies]
