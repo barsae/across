@@ -1,3 +1,17 @@
+time cargo run --release
+real	0m24.159s
+user	0m24.102s
+sys	0m0.392s
+
+
+--- After skipping impossible PLAYABLEs + rayon
+
+real	0m3.338s
+user	0m4.903s
+sys	0m0.424s
+-----
+
+
 Some([
 Play { x: 5, y: 5, dx: -1, dy: 0, count: 3 },
 Play { x: 1, y: 8, dx: 1, dy: 0, count: 2 },

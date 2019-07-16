@@ -1,8 +1,13 @@
 extern crate core;
+extern crate rayon;
 
 use std::fmt::{Display, Formatter, Error};
 use ::SquareState::{BLOCK, PLAYABLE, EMPTY, FULL};
 use core::fmt::Write;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering::Relaxed;
+use rayon::iter::IntoParallelRefIterator;
+use rayon::iter::ParallelIterator;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum SquareState {
@@ -29,7 +34,7 @@ struct Play {
 
 impl Square {
     fn parse(c: char) -> Result<Square, String> {
-        if c >= '1' && c<= '9' {
+        if c >= '1' && c <= '9' || c >= 'a' && c <= 'f' {
             Ok(Square {
                 state: PLAYABLE,
                 count: from_hex(c),
@@ -190,40 +195,36 @@ impl Map {
     }
 
     fn solve(&self) -> Option<Vec<Play>> {
-        return self.solve_inner(0).map(|mut solution| { solution.reverse(); solution });
+        return self.solve_inner(0, &AtomicBool::new(false)).map(|mut solution| { solution.reverse(); solution });
     }
 
-    fn solve_inner(&self, depth: u8) -> Option<Vec<Play>> {
-//        println!("Solving:");
-//        println!("{}", self);
-
+    fn solve_inner(&self, depth: u8, cancelled: &AtomicBool) -> Option<Vec<Play>> {
         if self.is_solved() {
-//            println!("Solved!");
             return Some(vec!());
         }
 
         let plays = self.get_plays();
-//        println!("Plays:");
-//        println!("{:?}", plays);
 
-        for (i, play) in plays.iter().enumerate() {
-            if depth < 2 {
-                for _ in 0..depth {
-                    print!(" ");
+        return plays.iter()
+            .map(|play: &Play| -> Option<Vec<Play>> {
+                if cancelled.load(Relaxed) {
+                    return None;
                 }
-                println!("{}/{}", i, plays.len());
-            }
 
-            let mut map = self.clone();
-            map.apply_play(&play);
+                let mut map = self.clone();
+                map.apply_play(&play);
 
-            if let Some(mut solution) = map.solve_inner(depth + 1) {
-                solution.push(play.clone());
-                return Some(solution);
-            }
-        }
+                if let Some(mut solution) = map.solve_inner(depth + 1, cancelled) {
+                    cancelled.store(true, Relaxed);
+                    solution.push(play.clone());
+                    return Some(solution);
+                }
 
-        None
+                return None
+            })
+            .fold(
+                None,
+                |prev: Option<Vec<Play>>, solution: Option<Vec<Play>>| prev.or(solution))
     }
 }
 
@@ -237,14 +238,6 @@ impl Display for Map {
         }
         Ok(())
     }
-}
-
-fn main() -> Result<(), String> {
-//    let map = Map::parse("1.\n1.\n.1")?;
-    let map = Map::parse(include_str!("../maps/1-60.map"))?;
-    let solution = map.solve();
-    println!("Solution:\n{:?}", solution);
-    Ok(())
 }
 
 fn from_hex(c: char) -> u8 {
@@ -266,3 +259,12 @@ fn to_hex(i: u8) -> char {
         panic!("Can't to_hex numbers outside 1-16")
     }
 }
+
+fn main() -> Result<(), String> {
+//    let map = Map::parse("1.\n1.\n.1")?;
+    let map = Map::parse(include_str!("../maps/4-80.map"))?;
+    let solution = map.solve();
+    println!("Solution:\n{:?}", solution);
+    Ok(())
+}
+
